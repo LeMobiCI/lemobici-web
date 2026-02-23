@@ -13,6 +13,19 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      # Nettoyage du dossier distant AVANT transfert
+      - name: Clean remote temp folder
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.VPS_IP }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          port: ${{ secrets.VPS_SSH_PORT }}
+          script: |
+            rm -rf /opt/lemobici/lemobici-web-temp
+            mkdir -p /opt/lemobici/lemobici-web-temp
+
+      # Transfert du code vers le VPS
       - name: Transfer code to VPS
         uses: appleboy/scp-action@v0.1.7
         with:
@@ -22,8 +35,10 @@ jobs:
           port: ${{ secrets.VPS_SSH_PORT }}
           source: "."
           target: "/opt/lemobici/lemobici-web-temp"
-          overwrite: false
+          overwrite: true
+          tar_args: "--exclude='.git*'"
 
+      # Build et déploiement du container docker sur le VPS
       - name: Build & Deploy Docker container
         uses: appleboy/ssh-action@v1.0.3
         with:
