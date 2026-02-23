@@ -1,0 +1,50 @@
+name: Deploy lemobici Web
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Transfer code to VPS
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.VPS_IP }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          port: ${{ secrets.VPS_SSH_PORT }}
+          source: "."
+          target: "/opt/lemobici/lemobici-web-temp"
+          overwrite: true
+
+      - name: Build & Deploy Docker container
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.VPS_IP }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          port: ${{ secrets.VPS_SSH_PORT }}
+          script: |
+            cd /opt/lemobici/lemobici-web-temp
+
+            # Build Angular en prod
+            docker build -t lemobici-web:latest .
+
+            # Stop container existant (si présent)
+            if [ $(docker ps -q -f name=lemobici-web-container) ]; then
+              docker stop lemobici-web-container
+              docker rm lemobici-web-container
+            fi
+
+            # Run nouveau container
+            docker run -d \
+              --name lemobici-web-container \
+              -p 80:80 \
+              lemobici-web:latest
