@@ -47,6 +47,8 @@ jobs:
           script: |
             set -e  # Arrêt sur erreur
             
+            cd /opt/lemobici
+            
             # Arrêter le conteneur web existant
             docker stop lemobici-web-container 2>/dev/null || true
             docker rm -f lemobici-web-container 2>/dev/null || true
