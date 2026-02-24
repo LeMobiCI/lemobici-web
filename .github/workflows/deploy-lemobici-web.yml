@@ -1,4 +1,4 @@
-name: Deploy lemobici Web
+name: Deploy Lemobici web
 
 on:
   push:
@@ -8,38 +8,27 @@ on:
 jobs:
   deploy:
     runs-on: ubuntu-latest
-
+    
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      # Nettoyage du dossier distant AVANT transfert
-      - name: Clean remote temp folder
-        uses: appleboy/ssh-action@v1.0.3
-        with:
-          host: ${{ secrets.VPS_IP }}
-          username: ${{ secrets.VPS_USER }}
-          key: ${{ secrets.SSH_PRIVATE_KEY }}
-          port: ${{ secrets.VPS_SSH_PORT }}
-          script: |
-            rm -rf /opt/lemobici/lemobici-web-temp
-            mkdir -p /opt/lemobici/lemobici-web-temp
+      # Optionnel : préparer une archive propre
+      - name: Prepare deployment archive
+        run: |
+          tar czf deploy.tar.gz --exclude='.git' --exclude='.github' --exclude='.gitignore' .
 
-      # Transfert du code vers le VPS
-      - name: Transfer code to VPS
+      - name: Transfer to VPS
         uses: appleboy/scp-action@v0.1.7
         with:
           host: ${{ secrets.VPS_IP }}
           username: ${{ secrets.VPS_USER }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           port: ${{ secrets.VPS_SSH_PORT }}
-          source: "."
-          target: "/opt/lemobici/lemobici-web-temp"
-          overwrite: true
-          tar_args: "--exclude='.git*'"
+          source: "deploy.tar.gz"
+          target: "/opt/lemobici/tmp"
 
-      # Build et déploiement du container docker sur le VPS
-      - name: Build & Deploy Docker container
+      - name: Deploy with zero downtime
         uses: appleboy/ssh-action@v1.0.3
         with:
           host: ${{ secrets.VPS_IP }}
@@ -47,19 +36,30 @@ jobs:
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           port: ${{ secrets.VPS_SSH_PORT }}
           script: |
-            cd /opt/lemobici/lemobici-web-temp
-
-            # Build Angular en prod
-            docker build -t lemobici-web:latest .
-
-            # Stop container existant (si présent)
-            if [ $(docker ps -q -f name=lemobici-web-container) ]; then
-              docker stop lemobici-web-container
-              docker rm lemobici-web-container
+            set -e  # Arrêt sur erreur
+            
+            cd /opt/lemobici
+            
+            # Backup de l'ancienne version (rollback possible)
+            if [ -d "lemobici-web" ]; then
+              mv lemobici-web lemobici-web.backup.$(date +%s)
             fi
-
-            # Run nouveau container
-            docker run -d \
-              --name lemobici-web-container \
-              -p 4200:4200 \
-              lemobici-web:latest
+            
+            # Extraction dans un dossier temporaire
+            mkdir -p lemobici-web-new
+            tar xzf tmp/deploy.tar.gz -C lemobici-web-new
+            
+            # Swap atomique
+            mv lemobici-web-new lemobici-web
+            
+            # Cleanup
+            rm -f tmp/deploy.tar.gz
+            
+            # Docker deploy
+            docker compose up -d --build web
+            
+            # Health check basique
+            sleep 5
+            docker compose ps web
+            
+            echo "Deployment Web finished ••• 1 ⚔️ ••• ✅"
