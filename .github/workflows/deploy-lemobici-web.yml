@@ -47,28 +47,26 @@ jobs:
           script: |
             set -e  # Arrêt sur erreur
             
-            cd /opt/lemobici
+            # Arrêter le conteneur web existant
+            docker stop lemobici-web-container 2>/dev/null || true
+            docker rm -f lemobici-web-container 2>/dev/null || true
             
-            # Backup de l'ancienne version (rollback possible)
+            # Backup du code
             if [ -d "lemobici-web" ]; then
               mv lemobici-web lemobici-web.backup.$(date +%s)
             fi
             
-            # Extraction dans un dossier temporaire
-            mkdir -p lemobici-web-new
-            tar xzf tmp/deploy.tar.gz -C lemobici-web-new
-            
-            # Swap atomique
-            mv lemobici-web-new lemobici-web
-            
-            # Cleanup
+            # Extraction
+            mkdir -p lemobici-web
+            tar xzf tmp/deploy.tar.gz -C lemobici-web
             rm -f tmp/deploy.tar.gz
             
-            # Docker deploy
-            docker compose -f docker-compose-dev.yml --env-file .env.dev up -d --build web
+            # Build et démarrage
+            docker compose -f docker-compose-dev.yml --env-file .env.dev build web
+            docker compose -f docker-compose-dev.yml --env-file .env.dev up -d web
             
-            # Health check basique
+            # Health check
             sleep 5
-            docker compose ps web
+            docker ps --filter "name=lemobici-web-container" --format "table {{.Names}}\t{{.Status}}"
             
             echo "Deployment Web finished ••• 1 ⚔️ ••• ✅"
