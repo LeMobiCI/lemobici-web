@@ -50,8 +50,8 @@ jobs:
             cd /opt/lemobici
             
             # Arrêter le conteneur web existant
-            docker stop lemobici-web-container 2>/dev/null || true
-            docker rm -f lemobici-web-container 2>/dev/null || true
+            docker stop lemobici-web 2>/dev/null || true
+            docker rm -f lemobici-web 2>/dev/null || true
             
             # Backup du code
             if [ -d "lemobici-web" ]; then
@@ -64,11 +64,11 @@ jobs:
             rm -f tmp/deploy.tar.gz
             
             # Build et démarrage
-            docker compose -f docker-compose-dev.yml --env-file .env.dev build web
-            docker compose -f docker-compose-dev.yml --env-file .env.dev up -d web
+            docker compose build web
+            docker compose up -d web
             
             # Health check
             sleep 5
-            docker ps --filter "name=lemobici-web-container" --format "table {{.Names}}\t{{.Status}}"
+            docker ps --filter "name=lemobici-web" --format "table {{.Names}}\t{{.Status}}"
             
             echo "Deployment Web finished ••• 1 ⚔️ ••• ✅"
